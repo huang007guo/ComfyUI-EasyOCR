@@ -104,7 +104,7 @@ def plot_boxes_to_image(image_pil, tgt):
 
     # Get the current file path and use it to create a relative path to the font file
     current_file_path = os.path.dirname(os.path.abspath(__file__))
-    font_path = os.path.join(current_file_path, "docs", "PingFang Regular.ttf")
+    font_path = os.path.join(current_file_path, "docs", "PingFangRegular.ttf")
     font_size = 20
     font = ImageFont.truetype(font_path, font_size)
 
@@ -252,9 +252,15 @@ class ApplyEasyOCR:
                 mask = np.zeros((height, width, 1), dtype=np.uint8)
                 empty_mask = torch.from_numpy(mask).permute(2, 0, 1).float() / 255.0
                 res_masks.extend(empty_mask)
-
+        # 合并所有的蒙版为一个单一的蒙版
+        if len(res_masks) > 0:
+            combined_mask = torch.max(torch.stack(res_masks, dim=0), dim=0).values
+        else:
+            # 创建一个默认的空蒙版，假设所有图像都有相同的尺寸
+            default_mask = np.zeros((image[0].shape[1], image[0].shape[2]), dtype=np.uint8)
+            combined_mask = torch.from_numpy(default_mask).float() / 255.0
         return (
             torch.cat(res_images, dim=0),
-            torch.cat(res_masks, dim=0),
+            combined_mask,
             res_labels,
         )
