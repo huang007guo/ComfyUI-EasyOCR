@@ -125,8 +125,11 @@ def plot_boxes_to_image(image_pil, tgt):
         x2, y2 = formatted_points[2]
         threshold = round(threshold, 2)
 
-        x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
-        points = [[x1, y1], [x2, y2]]
+        # Ensure coordinates are valid
+        x_min, x_max = sorted([int(x1), int(x2)])
+        y_min, y_max = sorted([int(y1), int(y2)])
+
+        points = [[x_min, y_min], [x_max, y_max]]
 
         # Save labelme json
         shape = {
@@ -139,26 +142,26 @@ def plot_boxes_to_image(image_pil, tgt):
         labelme_data["shapes"].append(shape)
 
         # Change label
-        label = label + ":" + str(threshold)
+        label = f"{label}:{threshold}"
         shape["threshold"] = str(threshold)
 
         # Draw rectangle on the image using PIL
-        draw.rectangle([(x1, y1), (x2, y2)], outline=box_color, width=3)
+        draw.rectangle([(x_min, y_min), (x_max, y_max)], outline=box_color, width=3)
 
         # Draw label on the image using PIL
-        text_bbox = draw.textbbox((x1, y1), label, font=font)
+        text_bbox = draw.textbbox((x_min, y_min), label, font=font)
         text_width = text_bbox[2] - text_bbox[0]
         text_height = text_bbox[3] - text_bbox[1]
 
-        label_ymin = max(y1, text_height + 10)
+        label_ymin = max(y_min, text_height + 10)
         draw.rectangle(
-            [(x1, y1 - text_height - 10), (x1 + text_width, y1)], fill=box_color
+            [(x_min, y_min - text_height - 10), (x_min + text_width, y_min)], fill=box_color
         )
-        draw.text((x1, y1 - text_height - 10), label, font=font, fill=text_color)
+        draw.text((x_min, y_min - text_height - 10), label, font=font, fill=text_color)
 
         # Draw mask
         mask = np.zeros((H, W, 1), dtype=np.uint8)
-        cv2.rectangle(mask, (int(x1), int(y1)), (int(x2), int(y2)), (255, 255, 255), -1)
+        cv2.rectangle(mask, (x_min, y_min), (x_max, y_max), (255, 255, 255), -1)
         mask_tensor = torch.from_numpy(mask).permute(2, 0, 1).float() / 255.0
         res_mask.append(mask_tensor)
 
@@ -173,8 +176,7 @@ def plot_boxes_to_image(image_pil, tgt):
     # Convert the modified image to a torch tensor
     image_with_boxes_tensor = torch.from_numpy(
         image_with_boxes.astype(np.float32) / 255.0
-    )
-    image_with_boxes_tensor = torch.unsqueeze(image_with_boxes_tensor, 0)
+    ).unsqueeze(0)
     res_image.append(image_with_boxes_tensor)
 
     return res_image, res_mask, labelme_data
@@ -231,13 +233,13 @@ class ApplyEasyOCR:
             if not os.path.exists(model_storage_directory):
                 os.makedirs(model_storage_directory)
 
-            reader  = easyocr.Reader(language, model_storage_directory=model_storage_directory,gpu=gpu)
+            reader = easyocr.Reader(language, model_storage_directory=model_storage_directory, gpu=gpu)
             result = reader.readtext(np.array(image_pil))
 
             size = image_pil.size
             pred_dict = {
                 "size": [size[1], size[0]],
-                "result":result
+                "result": result
             }
 
             image_tensor, mask_tensor, labelme_data = plot_boxes_to_image(image_pil, pred_dict)
@@ -246,19 +248,14 @@ class ApplyEasyOCR:
             res_masks.extend(mask_tensor)
             res_labels.append(labelme_data)
 
-            if len(res_images) == 0:
-                res_images.extend(item)
-            if len(res_masks) == 0:
-                mask = np.zeros((height, width, 1), dtype=np.uint8)
-                empty_mask = torch.from_numpy(mask).permute(2, 0, 1).float() / 255.0
-                res_masks.extend(empty_mask)
         # 合并所有的蒙版为一个单一的蒙版
         if len(res_masks) > 0:
             combined_mask = torch.max(torch.stack(res_masks, dim=0), dim=0).values
         else:
             # 创建一个默认的空蒙版，假设所有图像都有相同的尺寸
-            default_mask = np.zeros((image[0].shape[1], image[0].shape[2]), dtype=np.uint8)
-            combined_mask = torch.from_numpy(default_mask).float() / 255.0
+            default_mask = np.zeros((image[0].shape[1], image[0].shape[2], 1), dtype=np.uint8)
+            combined_mask = torch.from_numpy(default_mask).permute(2, 0, 1).float() / 255.0
+
         return (
             torch.cat(res_images, dim=0),
             combined_mask,
