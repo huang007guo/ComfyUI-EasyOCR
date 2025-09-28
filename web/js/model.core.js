@@ -49,6 +49,8 @@ function addCustomLabel(nodeType, nodeData, widgetName = "detect") {
         injectHidden(LabelName);
         injectHidden(LabelList);
         sizeOptionWidget._value = sizeOptionWidget.value;
+        // const descriptor = Object.getOwnPropertyDescriptor(targetObject, "value");
+        // if (!descriptor || descriptor.configurable) {
         Object.defineProperty(sizeOptionWidget, "value", {
             set: function (value) {
                 //TODO: Only modify hidden/reset size when a change occurs
@@ -59,8 +61,8 @@ function addCustomLabel(nodeType, nodeData, widgetName = "detect") {
                     LabelName.hidden = false;
                     LabelList.hidden = true;
                 } else {
-                     LabelName.hidden = true;
-                     LabelList.hidden = true;
+                    LabelName.hidden = true;
+                    LabelList.hidden = true;
                 }
                 node.setSize([node.size[0], node.computeSize([node.size[0], node.size[1]])[1]])
                 this._value = value;
@@ -69,6 +71,7 @@ function addCustomLabel(nodeType, nodeData, widgetName = "detect") {
                 return this._value;
             }
         });
+        // }
         sizeOptionWidget.value = sizeOptionWidget._value;
     });
 }
